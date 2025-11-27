@@ -1,0 +1,21 @@
+# Port PropSI to Pure Go
+
+- [x] **Planning**
+    - [x] Create implementation plan <!-- id: 0 -->
+    - [x] Define Go structs for Fluid JSON data <!-- id: 1 -->
+- [x] **Data Layer**
+    - [x] Implement JSON loader for fluid files <!-- id: 2 -->
+    - [x] Load Water, Nitrogen, Hydrogen data <!-- id: 3 -->
+- [x] **Thermodynamics Core**
+    - [x] Implement Ideal Gas Helmholtz Energy (alpha0) <!-- id: 4 -->
+    - [x] Implement Residual Helmholtz Energy (alphar) <!-- id: 5 -->
+    - [x] Implement Property calculations (P, S, H, U, Cv, Cp) from Helmholtz energy <!-- id: 6 -->
+- [x] **Solvers**
+    - [x] Implement 1D solver (Brent/Newton) for T-D inputs <!-- id: 7 -->
+    - [x] Implement P-T flash (solve for Density given P, T) <!-- id: 8 -->
+- [x] **Interface**
+    - [x] Implement `PropSI` function <!-- id: 9 -->
+- [/] **Verification**
+    - [/] Verify against sample values for Water <!-- id: 10 -->
+    - [/] Verify against sample values for Nitrogen <!-- id: 11 -->
+    - [/] Verify against sample values for Hydrogen <!-- id: 12 -->

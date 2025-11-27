@@ -2,6 +2,7 @@ package props
 
 import (
 	"GOcoolprop/pkg/core"
+	"GOcoolprop/pkg/flash"
 	"GOcoolprop/pkg/fluid"
 	"GOcoolprop/pkg/solver"
 	"fmt"
@@ -107,6 +108,54 @@ func PropSI(output, name1 string, val1 float64, name2 string, val2 float64, flui
 
 	solved:
 		// Continue to output
+	} else if (name1 == "T" && name2 == "H") || (name1 == "H" && name2 == "T") {
+		// Case 3: T and H -> Solve for D using T-H flash
+		var H_target float64
+		if name1 == "T" {
+			T = val1
+			H_target = val2
+		} else {
+			H_target = val1
+			T = val2
+		}
+
+		var err error
+		Rho, err = flash.FlashTH(f, T, H_target)
+		if err != nil {
+			return 0, fmt.Errorf("T-H flash failed: %v", err)
+		}
+	} else if (name1 == "P" && name2 == "H") || (name1 == "H" && name2 == "P") {
+		// Case 4: P and H -> Solve for T and D using P-H flash
+		var P_target, H_target float64
+		if name1 == "P" {
+			P_target = val1
+			H_target = val2
+		} else {
+			H_target = val1
+			P_target = val2
+		}
+
+		var err error
+		T, Rho, err = flash.FlashPH(f, P_target, H_target)
+		if err != nil {
+			return 0, fmt.Errorf("P-H flash failed: %v", err)
+		}
+	} else if (name1 == "P" && name2 == "S") || (name1 == "S" && name2 == "P") {
+		// Case 5: P and S -> Solve for T and D using P-S flash
+		var P_target, S_target float64
+		if name1 == "P" {
+			P_target = val1
+			S_target = val2
+		} else {
+			S_target = val1
+			P_target = val2
+		}
+
+		var err error
+		T, Rho, err = flash.FlashPS(f, P_target, S_target)
+		if err != nil {
+			return 0, fmt.Errorf("P-S flash failed: %v", err)
+		}
 	} else {
 		return 0, fmt.Errorf("input pair %s, %s not supported yet", name1, name2)
 	}

@@ -145,3 +145,83 @@ func (s *State) Cp() float64 {
 
 	return s.Cv() + R*num*num/den
 }
+
+// Property derivatives for flash algorithms
+
+// DPdT returns ∂P/∂T at constant ρ
+func (s *State) DPdT() float64 {
+	R := s.Fluid.EOS[0].GasConstant
+	Tc := s.Fluid.EOS[0].States.Critical.T
+	if Tc == 0 {
+		Tc = s.Fluid.States.Critical.T
+	}
+
+	ar_dt := s.D2aDDeltaDTau
+
+	// ∂P/∂T = P/T - ρRT·δ·αʳ_δτ·Tc/T²
+	return s.P/s.T - s.Rho*R*s.T*s.Delta*ar_dt*Tc/(s.T*s.T)
+}
+
+// DPdRho returns ∂P/∂ρ at constant T
+func (s *State) DPdRho() float64 {
+	R := s.Fluid.EOS[0].GasConstant
+	Rhoc := s.Fluid.EOS[0].States.Critical.RhoMolar
+	if Rhoc == 0 {
+		Rhoc = s.Fluid.States.Critical.RhoMolar
+	}
+
+	// P = ρRT·δ·α_δ
+	// ∂P/∂ρ = RT·δ·α_δ + ρRT·∂(δ·α_δ)/∂ρ
+	// ∂(δ·α_δ)/∂ρ = ∂(δ·α_δ)/∂δ · ∂δ/∂ρ = (α_δ + δ·α_δδ) · (1/ρc)
+
+	return R*s.T*s.Delta*s.DaDDelta + s.Rho*R*s.T*(s.DaDDelta+s.Delta*s.D2aDDelta2)/Rhoc
+}
+
+// DHdT returns ∂H/∂T at constant ρ
+func (s *State) DHdT() float64 {
+	// This is actually Cp!
+	return s.Cp()
+}
+
+// DHdRho returns ∂H/∂ρ at constant T
+func (s *State) DHdRho() float64 {
+	// H = RT(τ·α_τ + δ·α_δ)
+	// ∂H/∂ρ = RT·∂(δ·α_δ)/∂ρ = RT·(α_δ + δ·α_δδ)·(1/ρc)
+
+	R := s.Fluid.EOS[0].GasConstant
+	Rhoc := s.Fluid.EOS[0].States.Critical.RhoMolar
+	if Rhoc == 0 {
+		Rhoc = s.Fluid.States.Critical.RhoMolar
+	}
+
+	return R * s.T * (s.DaDDelta + s.Delta*s.D2aDDelta2) / Rhoc
+}
+
+// DSdT returns ∂S/∂T at constant ρ
+func (s *State) DSdT() float64 {
+	// S = R(τ·α_τ - α)
+	// ∂S/∂T = R·∂(τ·α_τ - α)/∂T
+	// ∂(τ·α_τ)/∂T = (α_τ + τ·α_ττ)·(-Tc/T²)
+	// ∂α/∂T = α_τ·(-Tc/T²)
+	// ∂S/∂T = R·[-(α_τ + τ·α_ττ)·Tc/T² + α_τ·Tc/T²] = -R·τ·α_ττ·Tc/T²
+	// = -R·τ²·α_ττ/T = Cv/T
+
+	return s.Cv() / s.T
+}
+
+// DSdRho returns ∂S/∂ρ at constant T
+func (s *State) DSdRho() float64 {
+	// S = R(τ·α_τ - α)
+	// ∂S/∂ρ = R·∂(τ·α_τ - α)/∂ρ
+	// ∂(τ·α_τ)/∂ρ = τ·α_τδ·(1/ρc)
+	// ∂α/∂ρ = α_δ·(1/ρc)
+	// ∂S/∂ρ = R·(τ·α_τδ - α_δ)/ρc
+
+	R := s.Fluid.EOS[0].GasConstant
+	Rhoc := s.Fluid.EOS[0].States.Critical.RhoMolar
+	if Rhoc == 0 {
+		Rhoc = s.Fluid.States.Critical.RhoMolar
+	}
+
+	return R * (s.Tau*s.D2aDDeltaDTau - s.DaDDelta) / Rhoc
+}

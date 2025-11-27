@@ -2,6 +2,7 @@ package core
 
 import (
 	"GOcoolprop/pkg/fluid"
+	"fmt"
 )
 
 type State struct {
@@ -97,6 +98,9 @@ func (s *State) Update(T, Rho float64) {
 	// So yes, alpha0_delta = 1/delta.
 
 	s.P = s.Rho * R * s.T * s.Delta * s.DaDDelta
+
+	// DEBUG
+	fmt.Printf("State.Update: T=%v, Rho=%v, Delta=%v, DaDDelta=%v, P=%v\n", s.T, s.Rho, s.Delta, s.DaDDelta, s.P)
 }
 
 func (s *State) Pressure() float64 {

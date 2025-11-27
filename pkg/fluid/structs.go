@@ -21,6 +21,7 @@ type AncillaryCurve struct {
 	ReducingValue float64   `json:"reducing_value"`
 	N             []float64 `json:"n"`
 	T             []float64 `json:"t"`
+	TR            float64   `json:"T_r"` // Reducing temperature
 	UsingTauR     bool      `json:"using_tau_r"`
 }
 

@@ -1,2 +1,4 @@
 # GOcoolprop
-Coolprop but then for Golang, this is a golang port for coolprop
+Coolprop but then for Golang, as in...this is a Golang port for Coolprop..
+
+And it works really well. 

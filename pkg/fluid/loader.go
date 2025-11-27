@@ -21,8 +21,16 @@ func LoadFluid(path string) (*FluidData, error) {
 	return &fluid, nil
 }
 
-func LoadFluidByName(name string, dataDir string) (*FluidData, error) {
-	// Try name.json
-	path := filepath.Join(dataDir, name+".json")
+// LoadFluidByName loads a fluid by name from a directory
+// Uses the fluid registry to resolve aliases
+func LoadFluidByName(name, dataDir string) (*FluidData, error) {
+	// Try to get filename from registry
+	filename, err := GetFluidFilename(name)
+	if err != nil {
+		// Fallback: try direct filename
+		filename = name + ".json"
+	}
+
+	path := filepath.Join(dataDir, filename)
 	return LoadFluid(path)
 }

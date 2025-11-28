@@ -5,13 +5,93 @@ type FluidData struct {
 	EOS         []EOS       `json:"EOS"`
 	Info        Info        `json:"INFO"`
 	States      States      `json:"STATES"`
+	Transport   Transport   `json:"TRANSPORT"`
+}
+
+type Transport struct {
+	Viscosity      ViscosityData      `json:"viscosity"`
+	Conductivity   ConductivityData   `json:"conductivity"`
+	SurfaceTension SurfaceTensionData `json:"surface_tension"`
+}
+
+type ViscosityData struct {
+	BibTeX       string           `json:"BibTeX"`
+	Hardcoded    string           `json:"hardcoded"`
+	Dilute       *ViscosityDilute `json:"dilute"`
+	HigherOrder  *ViscosityHigher `json:"higher_order"`
+	SigmaEta     float64          `json:"sigma_eta"`
+	EpsilonOverK float64          `json:"epsilon_over_k"`
+}
+
+type ViscosityDilute struct {
+	Type      string    `json:"type"`
+	C         float64   `json:"C"`
+	A         []float64 `json:"a"`
+	MolarMass float64   `json:"molar_mass"`
+	T         []float64 `json:"t"`
+}
+
+type ViscosityHigher struct {
+	Type      string    `json:"type"`
+	TReduce   float64   `json:"T_reduce"`
+	RhoReduce float64   `json:"rhomolar_reduce"`
+	A         []float64 `json:"a"`
+	D1        []float64 `json:"d1"`
+	D2        []float64 `json:"d2"`
+	T1        []float64 `json:"t1"`
+	T2        []float64 `json:"t2"`
+	F         []float64 `json:"f"`
+	G         []float64 `json:"g"`
+	Gamma     []float64 `json:"gamma"`
+	H         []float64 `json:"h"`
+	L         []float64 `json:"l"`
+	P         []float64 `json:"p"`
+	Q         []float64 `json:"q"`
+}
+
+type ConductivityData struct {
+	BibTeX    string              `json:"BibTeX"`
+	Hardcoded string              `json:"hardcoded"`
+	Dilute    *ConductivityDilute `json:"dilute"`
+	Residual  *ConductivityResid  `json:"residual"`
+	Critical  *ConductivityCrit   `json:"critical"`
+}
+
+type ConductivityDilute struct {
+	Type string    `json:"type"`
+	A    []float64 `json:"A"`
+	B    []float64 `json:"B"`
+	T    []float64 `json:"t"` // Sometimes used
+}
+
+type ConductivityResid struct {
+	Type  string    `json:"type"`
+	A     []float64 `json:"A"`
+	D     []float64 `json:"d"`
+	Gamma []float64 `json:"gamma"`
+	L     []float64 `json:"l"`
+	T     []float64 `json:"t"`
+}
+
+type ConductivityCrit struct {
+	// Simplified for now
+	Hardcoded string `json:"hardcoded"`
+}
+
+type SurfaceTensionData struct {
+	BibTeX string    `json:"BibTeX"`
+	Type   string    `json:"type"`
+	A      []float64 `json:"a"`
+	N      []float64 `json:"n"`
+	Tc     float64   `json:"Tc"`
 }
 
 type Ancillaries struct {
 	// We might not need all ancillaries for the core PropSI, but good to have.
-	PS   AncillaryCurve `json:"pS"`
-	RhoL AncillaryCurve `json:"rhoL"`
-	RhoV AncillaryCurve `json:"rhoV"`
+	PS             AncillaryCurve     `json:"pS"`
+	RhoL           AncillaryCurve     `json:"rhoL"`
+	RhoV           AncillaryCurve     `json:"rhoV"`
+	SurfaceTension SurfaceTensionData `json:"surface_tension"`
 }
 
 type AncillaryCurve struct {

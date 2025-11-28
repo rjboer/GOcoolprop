@@ -6,6 +6,7 @@ import (
 	"GOcoolprop/pkg/fluid"
 	"GOcoolprop/pkg/saturation"
 	"GOcoolprop/pkg/solver"
+	"GOcoolprop/pkg/transport"
 	"fmt"
 	"strings"
 )
@@ -333,6 +334,12 @@ solved:
 		vV := 1.0 / rhoV
 
 		return (v - vL) / (vV - vL), nil
+	case "V", "VISCOSITY":
+		return transport.Viscosity(f, state.T, state.Rho)
+	case "L", "CONDUCTIVITY":
+		return transport.Conductivity(f, state.T, state.Rho)
+	case "I", "SURFACE_TENSION":
+		return transport.SurfaceTension(f, state.T)
 	default:
 		return 0, fmt.Errorf("output %s not supported", output)
 	}

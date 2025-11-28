@@ -85,20 +85,20 @@
 
 - [x] Implement saturation temperature from pressure
   - [x] Use ancillary Ps(T) / Ts(P) equations from JSON
-  - [ ] Validate range and accuracy per fluid
+  - [x] Validate range and accuracy per fluid
 - [x] Implement saturation pressure from temperature
   - [x] Direct evaluation of Ps(T) ancillary equation
-  - [ ] Validate against reference data
+  - [x] Validate against reference data
 - [x] Calculate saturated liquid/vapor densities
   - [x] Use rhoL(T) and rhoV(T) ancillary equations
-  - [ ] Add tests across temperature range
+  - [x] Add tests across temperature range
 - [x] Two-phase quality calculations
   - [x] Given T,Q or P,Q, calculate rho via v-mixing
   - [x] Compute Q from (T, rho) using v, vL, vV
-  - [ ] Verify behaviour near Q→0 and Q→1
+  - [x] Verify behaviour near Q→0 and Q→1
 - [x] Add saturation property outputs to PropSI
   - [x] `"T_SAT"`, `"P_SAT"`, `"Q"` (quality)
-  - [ ] Add tests for saturation outputs for each core fluid
+  - [x] Add tests for saturation outputs for each core fluid
 
 ---
 

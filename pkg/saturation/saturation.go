@@ -4,6 +4,7 @@ import (
 	"GOcoolprop/pkg/fluid"
 	"GOcoolprop/pkg/solver"
 	"fmt"
+	"math"
 )
 
 // Psat returns the saturation pressure at temperature T.
@@ -16,7 +17,7 @@ func Psat(f *fluid.FluidData, T float64) (float64, error) {
 		}
 	}
 
-	return f.Ancillaries.PS.Evaluate(T), nil
+	return f.Ancillaries.PS.Evaluate(T)
 }
 
 // Tsat returns the saturation temperature at pressure P.
@@ -29,8 +30,14 @@ func Tsat(f *fluid.FluidData, P float64) (float64, error) {
 	maxT := f.Ancillaries.PS.TMax
 
 	// Check if P is within range
-	minP := f.Ancillaries.PS.Evaluate(minT)
-	maxP := f.Ancillaries.PS.Evaluate(maxT)
+	minP, err := f.Ancillaries.PS.Evaluate(minT)
+	if err != nil {
+		return 0, err
+	}
+	maxP, err := f.Ancillaries.PS.Evaluate(maxT)
+	if err != nil {
+		return 0, err
+	}
 
 	if P < minP || P > maxP {
 		// Allow small tolerance
@@ -40,7 +47,11 @@ func Tsat(f *fluid.FluidData, P float64) (float64, error) {
 	}
 
 	obj := func(T float64) float64 {
-		return f.Ancillaries.PS.Evaluate(T) - P
+		val, err := f.Ancillaries.PS.Evaluate(T)
+		if err != nil {
+			return math.NaN()
+		}
+		return val - P
 	}
 
 	// Solve for T
@@ -54,10 +65,10 @@ func Tsat(f *fluid.FluidData, P float64) (float64, error) {
 
 // RhoL returns the saturated liquid density at temperature T.
 func RhoL(f *fluid.FluidData, T float64) (float64, error) {
-	return f.Ancillaries.RhoL.Evaluate(T), nil
+	return f.Ancillaries.RhoL.Evaluate(T)
 }
 
 // RhoV returns the saturated vapor density at temperature T.
 func RhoV(f *fluid.FluidData, T float64) (float64, error) {
-	return f.Ancillaries.RhoV.Evaluate(T), nil
+	return f.Ancillaries.RhoV.Evaluate(T)
 }

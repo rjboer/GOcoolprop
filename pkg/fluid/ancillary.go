@@ -1,12 +1,13 @@
 package fluid
 
 import (
+	"fmt"
 	"math"
 )
 
 // Evaluate calculates the value of the ancillary curve at temperature T.
 // Supported types: "pV", "pL", "rhoV", "rhoLnoexp"
-func (ac *AncillaryCurve) Evaluate(T float64) float64 {
+func (ac *AncillaryCurve) Evaluate(T float64) (float64, error) {
 	// Check bounds (optional, but good practice)
 	// if T < ac.TMin || T > ac.TMax { ... }
 
@@ -28,18 +29,17 @@ func (ac *AncillaryCurve) Evaluate(T float64) float64 {
 	switch ac.Type {
 	case "pV", "pL":
 		// p = pc * exp( (Tc/T) * sum )
-		return ac.ReducingValue * math.Exp((Tc/T)*sum)
+		return ac.ReducingValue * math.Exp((Tc/T)*sum), nil
 
 	case "rhoV":
 		// rho = rhoc * exp( (Tc/T) * sum )
-		return ac.ReducingValue * math.Exp((Tc/T)*sum)
+		return ac.ReducingValue * math.Exp((Tc/T)*sum), nil
 
 	case "rhoLnoexp":
 		// rho = rhoc * (1 + sum)
-		return ac.ReducingValue * (1.0 + sum)
+		return ac.ReducingValue * (1.0 + sum), nil
 
 	default:
-		// Unknown type or not implemented
-		return 0.0
+		return 0, fmt.Errorf("unsupported ancillary type %q", ac.Type)
 	}
 }

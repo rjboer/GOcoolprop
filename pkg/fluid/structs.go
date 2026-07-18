@@ -1,5 +1,10 @@
 package fluid
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 type FluidData struct {
 	Ancillaries Ancillaries `json:"ANCILLARIES"`
 	EOS         []EOS       `json:"EOS"`
@@ -14,6 +19,30 @@ type Transport struct {
 	SurfaceTension SurfaceTensionData `json:"surface_tension"`
 }
 
+func (t *Transport) UnmarshalJSON(data []byte) error {
+	type rawTransport struct {
+		Viscosity      json.RawMessage   `json:"viscosity"`
+		Conductivity   json.RawMessage   `json:"conductivity"`
+		SurfaceTension SurfaceTensionData `json:"surface_tension"`
+	}
+	var raw rawTransport
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	t.SurfaceTension = raw.SurfaceTension
+	if len(raw.Viscosity) > 0 {
+		if err := json.Unmarshal(raw.Viscosity, &t.Viscosity); err != nil {
+			return fmt.Errorf("viscosity: %w", err)
+		}
+	}
+	if len(raw.Conductivity) > 0 {
+		if err := json.Unmarshal(raw.Conductivity, &t.Conductivity); err != nil {
+			return fmt.Errorf("conductivity: %w", err)
+		}
+	}
+	return nil
+}
+
 type ViscosityData struct {
 	BibTeX       string           `json:"BibTeX"`
 	Hardcoded    string           `json:"hardcoded"`
@@ -21,6 +50,28 @@ type ViscosityData struct {
 	HigherOrder  *ViscosityHigher `json:"higher_order"`
 	SigmaEta     float64          `json:"sigma_eta"`
 	EpsilonOverK float64          `json:"epsilon_over_k"`
+	Type         string           `json:"type"`
+	ReferenceFluid string         `json:"reference_fluid"`
+}
+
+func (v *ViscosityData) UnmarshalJSON(data []byte) error {
+	type alias ViscosityData
+	var single alias
+	if err := json.Unmarshal(data, &single); err == nil {
+		*v = ViscosityData(single)
+		return nil
+	}
+
+	var many []alias
+	if err := json.Unmarshal(data, &many); err != nil {
+		return err
+	}
+	if len(many) == 0 {
+		*v = ViscosityData{}
+		return nil
+	}
+	*v = ViscosityData(many[0])
+	return nil
 }
 
 type ViscosityDilute struct {
@@ -55,6 +106,8 @@ type ConductivityData struct {
 	Dilute    *ConductivityDilute `json:"dilute"`
 	Residual  *ConductivityResid  `json:"residual"`
 	Critical  *ConductivityCrit   `json:"critical"`
+	Type      string              `json:"type"`
+	ReferenceFluid string         `json:"reference_fluid"`
 }
 
 type ConductivityDilute struct {
@@ -139,6 +192,10 @@ type Alpha0Term struct {
 	A    float64   `json:"a,omitempty"` // For LogTau
 	N    []float64 `json:"n,omitempty"`
 	T    []float64 `json:"t,omitempty"`
+	V    []float64 `json:"v,omitempty"`
+	Tcrit float64  `json:"Tcrit,omitempty"`
+	C    []float64 `json:"c,omitempty"`
+	D    []float64 `json:"d,omitempty"`
 }
 
 type AlphaRTerm struct {
@@ -152,6 +209,11 @@ type AlphaRTerm struct {
 	Epsilon []float64 `json:"epsilon,omitempty"`
 	Beta    []float64 `json:"beta,omitempty"`
 	Eta     []float64 `json:"eta,omitempty"`
+	A       []float64 `json:"a,omitempty"`
+	B       []float64 `json:"b,omitempty"`
+	C       []float64 `json:"C,omitempty"`
+	ABig    []float64 `json:"A,omitempty"`
+	DBig    []float64 `json:"D,omitempty"`
 }
 
 type CriticalRegion struct {

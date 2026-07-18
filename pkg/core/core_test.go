@@ -13,7 +13,10 @@ func TestWaterCore(t *testing.T) {
 		t.Fatalf("Failed to load Water: %v", err)
 	}
 
-	state := NewState(f)
+	state, err := NewState(f)
+	if err != nil {
+		t.Fatalf("Failed to build state: %v", err)
+	}
 
 	var Temp, RhoMolar, P, ExpectedP, R, RhoIdeal, P_Ideal float64
 
@@ -63,7 +66,10 @@ func TestNitrogenCore(t *testing.T) {
 		t.Fatalf("Failed to load Nitrogen: %v", err)
 	}
 
-	state := NewState(f)
+	state, err := NewState(f)
+	if err != nil {
+		t.Fatalf("Failed to build state: %v", err)
+	}
 
 	// T=300, P=101325. Expected Rho=40.6
 	Temp := 300.0

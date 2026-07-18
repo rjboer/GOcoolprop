@@ -232,3 +232,138 @@ func (t *ResidualHelmholtzGaussian) DDeltaTau(tau, delta float64) float64 {
 	}
 	return sum
 }
+
+// ResidualHelmholtzNonAnalytic matches the CoolProp non-analytic critical term.
+type ResidualHelmholtzNonAnalytic struct {
+	N    []float64
+	A    []float64
+	B    []float64
+	Beta []float64
+	ABig []float64
+	C    []float64
+	DBig []float64
+}
+
+func nonAnalyticShift(tauIn, deltaIn float64) (tau, delta float64) {
+	tau, delta = tauIn, deltaIn
+	eps := 10 * math.SmallestNonzeroFloat64
+	if math.Abs(tau-1) < eps {
+		tau = 1 + eps
+	}
+	if math.Abs(delta-1) < eps {
+		delta = 1 + eps
+	}
+	return tau, delta
+}
+
+func (t *ResidualHelmholtzNonAnalytic) eval(i int, tauIn, deltaIn float64) (term, dDelta, dTau, dDelta2, dTau2, dDeltaTau float64) {
+	tau, delta := nonAnalyticShift(tauIn, deltaIn)
+	n := t.N[i]
+	ai := t.A[i]
+	bi := t.B[i]
+	betai := t.Beta[i]
+	Ai := t.ABig[i]
+	Ci := t.C[i]
+	Di := t.DBig[i]
+
+	dm1 := delta - 1.0
+	tm1 := tau - 1.0
+	dm1sq := dm1 * dm1
+	absPow := math.Pow(dm1sq, 1.0/(2.0*betai))
+
+	theta := (1.0 - tau) + Ai*absPow
+	dthetaTau := -1.0
+	dthetaDelta := Ai / betai * math.Pow(dm1sq, 1.0/(2.0*betai)-1.0) * dm1
+	d2thetaDelta2 := Ai / betai * (1.0/betai - 1.0) * math.Pow(dm1sq, 1.0/(2.0*betai)-1.0)
+
+	psi := math.Exp(-Ci*dm1sq - Di*tm1*tm1)
+	dpsiDeltaOverPsi := -2.0 * Ci * dm1
+	dpsiDelta := dpsiDeltaOverPsi * psi
+	dpsiTauOverPsi := -2.0 * Di * tm1
+	dpsiTau := dpsiTauOverPsi * psi
+	d2psiDelta2OverPsi := (2.0*Ci*dm1sq - 1.0) * 2.0 * Ci
+	d2psiDelta2 := d2psiDelta2OverPsi * psi
+	d2psiTau2 := (2.0*Di*tm1*tm1 - 1.0) * 2.0 * Di * psi
+	d2psiDeltaTau := dpsiDelta * dpsiTauOverPsi
+
+	deltaTerm := theta*theta + t.B[i]*math.Pow(dm1sq, ai)
+	dDeltaTauTerm := 2.0 * theta * dthetaTau
+	dDeltaDeltaTerm := 2.0*theta*dthetaDelta + 2.0*t.B[i]*ai*math.Pow(dm1sq, ai-1.0)*dm1
+	d2DeltaTau2Term := 2.0
+	d2DeltaDeltaTauTerm := 2.0 * dthetaTau * dthetaDelta
+	d2DeltaDelta2Term := 2.0 * (theta*d2thetaDelta2 + dthetaDelta*dthetaDelta + t.B[i]*(2.0*ai*ai-ai)*math.Pow(dm1sq, ai-1.0))
+
+	deltaPowBi := math.Pow(deltaTerm, bi)
+	dDeltaPowBiDelta := bi * math.Pow(deltaTerm, bi-1.0) * dDeltaDeltaTerm
+	dDeltaPowBiTau := bi * math.Pow(deltaTerm, bi-1.0) * dDeltaTauTerm
+	d2DeltaPowBiDelta2 := bi * (math.Pow(deltaTerm, bi-1.0)*d2DeltaDelta2Term + (bi-1.0)*math.Pow(deltaTerm, bi-2.0)*dDeltaDeltaTerm*dDeltaDeltaTerm)
+	d2DeltaPowBiTau2 := bi*math.Pow(deltaTerm, bi-1.0)*d2DeltaTau2Term + bi*(bi-1.0)*math.Pow(deltaTerm, bi-2.0)*dDeltaTauTerm*dDeltaTauTerm
+	d2DeltaPowBiDeltaTau := bi * (math.Pow(deltaTerm, bi-1.0)*d2DeltaDeltaTauTerm + (bi-1.0)*math.Pow(deltaTerm, bi-2.0)*dDeltaTauTerm*dDeltaDeltaTerm)
+
+	term = n * delta * deltaPowBi * psi
+	dTau = n * delta * (deltaPowBi*dpsiTau + dDeltaPowBiTau*psi)
+	dDelta = n * (deltaPowBi*(psi+delta*dpsiDelta) + dDeltaPowBiDelta*delta*psi)
+	dTau2 = n * delta * (d2DeltaPowBiTau2*psi + 2.0*dDeltaPowBiTau*dpsiTau + deltaPowBi*d2psiTau2)
+	dDeltaTau = n * (deltaPowBi*(dpsiTau+delta*d2psiDeltaTau) +
+		delta*dDeltaPowBiDelta*dpsiTau +
+		dDeltaPowBiTau*(psi+delta*dpsiDelta) +
+		d2DeltaPowBiDeltaTau*delta*psi)
+	dDelta2 = n * (deltaPowBi*(2.0*dpsiDelta+delta*d2psiDelta2) +
+		2.0*dDeltaPowBiDelta*(psi+delta*dpsiDelta) +
+		d2DeltaPowBiDelta2*delta*psi)
+	return
+}
+
+func (t *ResidualHelmholtzNonAnalytic) Term(tau, delta float64) float64 {
+	sum := 0.0
+	for i := range t.N {
+		term, _, _, _, _, _ := t.eval(i, tau, delta)
+		sum += term
+	}
+	return sum
+}
+
+func (t *ResidualHelmholtzNonAnalytic) DDelta(tau, delta float64) float64 {
+	sum := 0.0
+	for i := range t.N {
+		_, dd, _, _, _, _ := t.eval(i, tau, delta)
+		sum += dd
+	}
+	return sum
+}
+
+func (t *ResidualHelmholtzNonAnalytic) DTau(tau, delta float64) float64 {
+	sum := 0.0
+	for i := range t.N {
+		_, _, dt, _, _, _ := t.eval(i, tau, delta)
+		sum += dt
+	}
+	return sum
+}
+
+func (t *ResidualHelmholtzNonAnalytic) DDelta2(tau, delta float64) float64 {
+	sum := 0.0
+	for i := range t.N {
+		_, _, _, dd2, _, _ := t.eval(i, tau, delta)
+		sum += dd2
+	}
+	return sum
+}
+
+func (t *ResidualHelmholtzNonAnalytic) DTau2(tau, delta float64) float64 {
+	sum := 0.0
+	for i := range t.N {
+		_, _, _, _, dt2, _ := t.eval(i, tau, delta)
+		sum += dt2
+	}
+	return sum
+}
+
+func (t *ResidualHelmholtzNonAnalytic) DDeltaTau(tau, delta float64) float64 {
+	sum := 0.0
+	for i := range t.N {
+		_, _, _, _, _, ddt := t.eval(i, tau, delta)
+		sum += ddt
+	}
+	return sum
+}

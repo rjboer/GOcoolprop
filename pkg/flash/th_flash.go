@@ -1,151 +1,208 @@
 package flash
 
 import (
-	"fmt"
-	"math"
-
 	"GOcoolprop/pkg/core"
 	"GOcoolprop/pkg/fluid"
+	"GOcoolprop/pkg/saturation"
 	"GOcoolprop/pkg/solver"
+	"fmt"
+	"math"
 )
 
 // FlashTH solves for density given temperature and molar enthalpy.
-// Returns density in mol/m³.
+// Only stable single-phase states and saturation endpoints are supported.
 func FlashTH(fluidData *fluid.FluidData, T, H_target float64) (float64, error) {
-	state := core.NewState(fluidData)
+	var (
+		hL, hV            float64
+		rhoL, rhoV        float64
+		hasSatBand        bool
+		satBandLow        float64
+		satBandHigh       float64
+		preferredSeed     float64
+		preferredLiquid   bool
+	)
+	if T > 0 && T < fluidData.States.Critical.T {
+		var err error
+		rhoL, err = saturation.RhoL(fluidData, T)
+		if err == nil {
+			rhoV, err = saturation.RhoV(fluidData, T)
+			if err == nil {
+				state, err := core.NewState(fluidData)
+				if err == nil {
+					state.Update(T, rhoL)
+					hL = state.MolarEnthalpy()
+					state.Update(T, rhoV)
+					hV = state.MolarEnthalpy()
+					hasSatBand = true
+					satBandLow = math.Min(hL, hV)
+					satBandHigh = math.Max(hL, hV)
+					preferredLiquid = math.Abs(H_target-hL) <= math.Abs(H_target-hV)
+					if preferredLiquid {
+						preferredSeed = rhoL
+					} else {
+						preferredSeed = rhoV
+					}
+					scale := math.Max(1, math.Max(math.Abs(H_target), math.Max(math.Abs(hL), math.Abs(hV))))
+					if math.Abs(H_target-hL)/scale <= 1e-8 {
+						return rhoL, nil
+					}
+					if math.Abs(H_target-hV)/scale <= 1e-8 {
+						return rhoV, nil
+					}
+				}
+			}
+		}
+	}
 
-	// Objective: H(T, rho) - H_target = 0
+	state, err := core.NewState(fluidData)
+	if err != nil {
+		return 0, err
+	}
 	obj := func(rho float64) float64 {
 		state.Update(T, rho)
 		return state.MolarEnthalpy() - H_target
 	}
-
-	rhoCrit := fluidData.States.Critical.RhoMolar
-	rhoTripleLiq := fluidData.States.TripleLiquid.RhoMolar
-	if rhoTripleLiq == 0 {
-		// Fallback if no triple-point data
-		rhoTripleLiq = rhoCrit * 2.5
+	stableRoot := func(root float64) bool {
+		state.Update(T, root)
+		return state.Pressure() > 0 && state.DPdRho() > 0 && !math.IsNaN(state.MolarEnthalpy()) && !math.IsInf(state.MolarEnthalpy(), 0)
 	}
-
-	// ---- Phase preference based on enthalpy ----
-
-	rhoGasGuess := math.Max(1e-8, 0.01*rhoCrit)
-	rhoLiqGuess := rhoTripleLiq
-
-	state.Update(T, rhoGasGuess)
-	H_gas := state.MolarEnthalpy()
-
-	state.Update(T, rhoLiqGuess)
-	H_liq := state.MolarEnthalpy()
-
-	preferLiquid := math.Abs(H_target-H_liq) < math.Abs(H_target-H_gas)
-
-	// ---- Global density range to search ----
-	// Low end: very dilute gas; High end: comfortably above typical liquid density.
-	rhoMin := 1e-8
-	rhoMax := rhoTripleLiq * 3.0
-	if rhoMax == 0 {
-		rhoMax = rhoCrit * 5.0
-	}
-	if rhoMax <= rhoMin {
-		return 0, fmt.Errorf("invalid rho range [%g, %g]", rhoMin, rhoMax)
-	}
-
-	// ---- Scan for sign changes on log scale ----
-
-	const nScan = 200 // tune if needed
-	logMin := math.Log(rhoMin)
-	logMax := math.Log(rhoMax)
-	dlog := (logMax - logMin) / float64(nScan)
-
-	type rootInfo struct {
-		rho float64
-	}
-	roots := make([]rootInfo, 0, 4)
-
-	// Helper to de-duplicate roots
-	addRoot := func(r float64) {
-		if r <= 0 || math.IsNaN(r) || math.IsInf(r, 0) {
-			return
+	trySeedBracket := func(seed float64) (float64, bool) {
+		if seed <= 0 {
+			return 0, false
 		}
-		const relTol = 1e-6
-		for _, rr := range roots {
-			if math.Abs(r-rr.rho) <= relTol*math.Max(1.0, math.Abs(rr.rho)) {
-				return // already have a root here
+		multipliers := [][2]float64{
+			{0.995, 1.005},
+			{0.99, 1.01},
+			{0.98, 1.02},
+			{0.95, 1.05},
+			{0.9, 1.1},
+			{0.75, 1.25},
+			{0.5, 1.5},
+			{0.25, 2.0},
+		}
+		for _, pair := range multipliers {
+			a := seed * pair[0]
+			b := seed * pair[1]
+			if a <= 0 {
+				a = seed * 0.1
+			}
+			fa := obj(a)
+			fb := obj(b)
+			if math.IsNaN(fa) || math.IsInf(fa, 0) || math.IsNaN(fb) || math.IsInf(fb, 0) {
+				continue
+			}
+			if fa == 0 && stableRoot(a) {
+				return a, true
+			}
+			if fb == 0 && stableRoot(b) {
+				return b, true
+			}
+			if fa*fb < 0 {
+				root, err := solver.Brent(obj, a, b, 1e-10)
+				if err == nil && stableRoot(root) {
+					return root, true
+				}
 			}
 		}
-		roots = append(roots, rootInfo{rho: r})
+		return 0, false
 	}
 
-	// Initial point
-	prevRho := rhoMin
-	prevVal := obj(prevRho)
-	if math.IsNaN(prevVal) || math.IsInf(prevVal, 0) {
-		// Try to move a bit inward if the edge is pathological
-		prevRho = math.Exp(logMin + dlog)
-		prevVal = obj(prevRho)
-	}
-
-	for i := 1; i <= nScan; i++ {
-		rho := math.Exp(logMin + dlog*float64(i))
-		if rho <= prevRho {
-			continue
+	if hasSatBand {
+		if root, ok := trySeedBracket(preferredSeed); ok {
+			return root, nil
 		}
-
-		val := obj(rho)
-		if math.IsNaN(val) || math.IsInf(val, 0) {
-			// Skip regions where EOS blows up
-			prevRho, prevVal = rho, val
-			continue
-		}
-
-		// Direct hit?
-		if val == 0 {
-			addRoot(rho)
-		}
-
-		// Sign change bracket [prevRho, rho]
-		if prevVal*val < 0 {
-			a := prevRho
-			b := rho
-			// Safety: ensure increasing order
-			if a > b {
-				a, b = b, a
-			}
-
-			// Use the same tol semantics as your existing usage: on H.
-			const tolH = 1.0 // J/mol
-			root, err := solver.Brent(obj, a, b, tolH)
-			if err == nil {
-				addRoot(root)
-			}
-		}
-
-		prevRho, prevVal = rho, val
-	}
-
-	if len(roots) == 0 {
-		return 0, fmt.Errorf("FlashTH: no root found for T=%g K, H=%g J/mol", T, H_target)
-	}
-
-	// ---- Pick the "most physical" root given the phase hint ----
-
-	chosen := roots[0].rho
-	if preferLiquid {
-		// For liquid-like H, prefer the highest density root
-		for _, r := range roots {
-			if r.rho > chosen {
-				chosen = r.rho
-			}
-		}
-	} else {
-		// For gas-like H, prefer the lowest density root
-		for _, r := range roots {
-			if r.rho < chosen {
-				chosen = r.rho
+		if H_target > satBandLow && H_target < satBandHigh {
+			if preferredLiquid {
+				if root, ok := trySeedBracket(rhoV); ok {
+					return root, nil
+				}
+			} else {
+				if root, ok := trySeedBracket(rhoL); ok {
+					return root, nil
+				}
 			}
 		}
 	}
 
+	R := fluidData.EOS[0].GasConstant
+	ideal := 1.0
+	if T > 0 {
+		ideal = fluidData.States.Critical.P / (R * T)
+	}
+	maxRho := state.ReducingRho * 5
+	if fluidData.States.TripleLiquid.RhoMolar > 0 {
+		maxRho = fluidData.States.TripleLiquid.RhoMolar * 3
+	}
+
+	roots, err := bracketedRoots(1e-12, maxRho, 220, obj, 1e-10)
+	if err != nil {
+		if hasSatBand && H_target > satBandLow && H_target < satBandHigh {
+			return 0, fmt.Errorf("two-phase T-H flash unsupported for fluid=%s at T=%g", fluidData.Info.Name, T)
+		}
+		return 0, fmt.Errorf("T-H flash failed for fluid=%s T=%g H=%g: %w", fluidData.Info.Name, T, H_target, err)
+	}
+
+	stableRoots := make([]float64, 0, len(roots))
+	for _, root := range roots {
+		if stableRoot(root) {
+			stableRoots = append(stableRoots, root)
+		}
+	}
+	if len(stableRoots) == 0 {
+		if hasSatBand && H_target > satBandLow && H_target < satBandHigh {
+			return 0, fmt.Errorf("two-phase T-H flash unsupported for fluid=%s at T=%g", fluidData.Info.Name, T)
+		}
+		return 0, fmt.Errorf("T-H flash failed for fluid=%s T=%g H=%g: no stable root found", fluidData.Info.Name, T, H_target)
+	}
+
+	if hasSatBand {
+		if H_target > satBandHigh {
+			chosen := stableRoots[0]
+			for _, root := range stableRoots[1:] {
+				if root < chosen {
+					chosen = root
+				}
+			}
+			return chosen, nil
+		}
+		if H_target < satBandLow {
+			chosen := stableRoots[0]
+			for _, root := range stableRoots[1:] {
+				if root > chosen {
+					chosen = root
+				}
+			}
+			return chosen, nil
+		}
+	}
+
+	chosen := stableRoots[0]
+	for _, root := range stableRoots[1:] {
+		if abs(root-ideal) < abs(chosen-ideal) {
+			chosen = root
+		}
+	}
+	if hasSatBand && H_target > satBandLow && H_target < satBandHigh && len(roots) > 1 {
+		if math.Abs(H_target-hL) <= math.Abs(H_target-hV) {
+			for _, root := range stableRoots {
+				if root > chosen {
+					chosen = root
+				}
+			}
+		} else {
+			for _, root := range stableRoots {
+				if root < chosen {
+					chosen = root
+				}
+			}
+		}
+	}
 	return chosen, nil
+}
+
+func abs(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
 }

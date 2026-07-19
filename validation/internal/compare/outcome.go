@@ -1,5 +1,7 @@
 package compare
 
+import "strings"
+
 const (
 	OutcomePassed          = "passed"
 	OutcomeFailedNumeric   = "failed_numeric"
@@ -42,7 +44,7 @@ func Compare(candidate float64, candidateError, candidatePhase string, reference
 		return result
 	}
 	result.Metric = Metric(candidate, reference, tolerance)
-	if candidatePhase != "" && referencePhase != "" && candidatePhase != referencePhase {
+	if candidatePhase != "" && referencePhase != "" && normalizePhase(candidatePhase) != normalizePhase(referencePhase) {
 		result.Outcome = OutcomeFailedPhase
 		return result
 	}
@@ -53,6 +55,14 @@ func Compare(candidate float64, candidateError, candidatePhase string, reference
 		result.Classification = Classify(candidate, reference, tolerance.Absolute)
 	}
 	return result
+}
+
+func normalizePhase(phase string) string {
+	p := strings.ToLower(strings.TrimSpace(phase))
+	if strings.HasPrefix(p, "supercritical") {
+		return "supercritical"
+	}
+	return p
 }
 
 func NormalizeErrorText(err string) string {

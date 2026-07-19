@@ -19,6 +19,7 @@ type Result struct {
 	Value         float64
 	Error         string
 	ErrorCategory string
+	Phase         string
 }
 type CapabilityManifest struct {
 	Fluids     []string
@@ -69,7 +70,42 @@ func (e Engine) Evaluate(ctx context.Context, req Request) (result Result) {
 	if math.IsNaN(v) || math.IsInf(v, 0) {
 		return Result{Error: "non-finite result", ErrorCategory: "internal_error"}
 	}
-	return Result{Value: v}
+	result.Value = v
+	result.Phase = e.phase(req)
+	return result
+}
+
+func (e Engine) phase(req Request) string {
+	var temperature, pressure float64
+	switch {
+	case strings.EqualFold(req.Input1, "T") && strings.EqualFold(req.Input2, "P"):
+		temperature, pressure = req.Value1, req.Value2
+	case strings.EqualFold(req.Input1, "P") && strings.EqualFold(req.Input2, "T"):
+		pressure, temperature = req.Value1, req.Value2
+	default:
+		return ""
+	}
+	meta := e.Metadata(req.Fluid)
+	if temperature >= meta.Tcrit {
+		if pressure >= meta.Pcrit {
+			return "supercritical"
+		}
+		return "supercritical_gas"
+	}
+	if pressure >= meta.Pcrit {
+		return "supercritical_liquid"
+	}
+	psat, err := props.PropSI("P_SAT", "T", temperature, "Q", 0, req.Fluid)
+	if err != nil {
+		return ""
+	}
+	if math.Abs(pressure-psat)/math.Max(1, math.Abs(psat)) <= 1e-5 {
+		return "two_phase"
+	}
+	if pressure > psat {
+		return "liquid"
+	}
+	return "gas"
 }
 func (e Engine) toMolar(name string, mass float64) float64 {
 	m := e.Metadata(name).MolarMass

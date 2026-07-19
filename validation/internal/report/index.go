@@ -13,9 +13,21 @@ import (
 type Fluid struct {
 	Name, Status, Report  string
 	Total, Passed, Failed int
+	Counters              Counters
+}
+
+type Counters struct {
+	Attempted         int `json:"attempted"`
+	ValidCompared     int `json:"valid_compared"`
+	ValidPassed       int `json:"valid_passed"`
+	ValidFailed       int `json:"valid_failed"`
+	ConsistentInvalid int `json:"consistent_invalid"`
+	ErrorMismatch     int `json:"error_mismatch"`
+	Unresolved        int `json:"unresolved"`
 }
 
 func Index(path string, runID string, fluids []Fluid) error {
+	fluids = sortedFluids(fluids)
 	s := fmt.Sprintf("# CoolProp Validation Run %s\n\n| Fluid | Status | Mandatory | Passed | Failed | Failure %% | Report |\n|---|---|---:|---:|---:|---:|---|\n", runID)
 	for _, f := range fluids {
 		rate := 0.0
@@ -28,6 +40,7 @@ func Index(path string, runID string, fluids []Fluid) error {
 }
 
 func IndexWithPlan(path string, runID string, fluids []Fluid, plan stats.Plan) error {
+	fluids = sortedFluids(fluids)
 	s := fmt.Sprintf("# CoolProp Validation Run %s\n\n", runID)
 	s += "## Fluid screening results\n\n"
 	s += "| Fluid | Status | Mandatory | Passed | Failed | Failure % | Report |\n|---|---|---:|---:|---:|---:|---|\n"
@@ -56,4 +69,10 @@ func IndexWithPlan(path string, runID string, fluids []Fluid, plan stats.Plan) e
 		s += fmt.Sprintf("| %s | %d | %d | planned_not_executed |\n", suite, familyCount, familyCount*int(math.Ceil(float64(plan.RequiredSamples)/float64(plan.FamilyCount))))
 	}
 	return os.WriteFile(path, []byte(s), 0644)
+}
+
+func sortedFluids(fluids []Fluid) []Fluid {
+	ordered := append([]Fluid(nil), fluids...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Name < ordered[j].Name })
+	return ordered
 }

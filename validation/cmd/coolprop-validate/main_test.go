@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"GOcoolprop/validation/internal/candidate"
+	"GOcoolprop/validation/internal/compare"
 	"GOcoolprop/validation/internal/generator"
 	"GOcoolprop/validation/internal/reference"
 	"GOcoolprop/validation/internal/storage"
@@ -73,6 +74,17 @@ func TestCompareOutcomeRecordsNumericalMismatch(t *testing.T) {
 	}
 }
 
+func TestCompareOutcomeDoesNotPassConsistentErrors(t *testing.T) {
+	out := compareOutcome(
+		candidate.Result{Error: "out of range", ErrorCategory: "out_of_range"},
+		reference.Response{Results: []reference.Item{{Error: "out of range"}}},
+		nil,
+	)
+	if out.OK || out.Failure.Outcome != compare.OutcomeConsistentError {
+		t.Fatalf("consistent error must not pass: %+v", out)
+	}
+}
+
 func TestScreeningEnvelopeUsesInteriorTemperatureAndMetadataPressure(t *testing.T) {
 	env := screeningEnvelope(candidate.FluidMetadata{
 		Tmin:           100,
@@ -90,8 +102,8 @@ func TestScreeningEnvelopeUsesInteriorTemperatureAndMetadataPressure(t *testing.
 	if env.PMin != 1234 {
 		t.Fatalf("expected metadata Pmin, got %+v", env)
 	}
-	if env.PMax != 1e6 {
-		t.Fatalf("expected screening Pmax to use critical pressure, got %+v", env)
+	if env.PMax != 1e9 {
+		t.Fatalf("expected screening Pmax to use reference/domain maximum, got %+v", env)
 	}
 	if env.RhoMin != 0.05 {
 		t.Fatalf("expected screening RhoMin below triple vapor density, got %+v", env)
@@ -105,11 +117,11 @@ func TestWriteRunMetadataCreatesReproducibleArtifacts(t *testing.T) {
 	}
 	opts := options{Python: "python313.exe", Generator: generator.Config{Seed: 20260719}}
 	startup := map[string]any{
-		"python_version":  "Python 3.13.3",
+		"python_version":   "Python 3.13.3",
 		"coolprop_version": "7.2.0",
-		"gitrevision":     "reference123",
-		"backend":         "HEOS",
-		"reference_state": "DEF",
+		"gitrevision":      "reference123",
+		"backend":          "HEOS",
+		"reference_state":  "DEF",
 	}
 	if err := writeRunMetadata(run, opts, []string{"Water", "Hydrogen"}, startup); err != nil {
 		t.Fatal(err)

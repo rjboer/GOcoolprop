@@ -33,6 +33,17 @@ type Response struct {
 	Results   []Item `json:"results"`
 	Error     string `json:"error"`
 }
+type Metadata struct {
+	Fluid     string  `json:"fluid"`
+	MolarMass float64 `json:"molar_mass"`
+	Tmin      float64 `json:"tmin"`
+	Tmax      float64 `json:"tmax"`
+	Pmin      float64 `json:"pmin"`
+	Pmax      float64 `json:"pmax"`
+	Tcrit     float64 `json:"tcrit"`
+	Pcrit     float64 `json:"pcrit"`
+	RhoCrit   float64 `json:"rho_crit"`
+}
 type Worker struct {
 	cmd     *exec.Cmd
 	in      io.WriteCloser
@@ -90,5 +101,29 @@ func (w *Worker) Call(req Request) (Response, error) {
 		return Response{}, fmt.Errorf("decode reference response: %w", err)
 	}
 	return r, nil
+}
+
+func (w *Worker) Metadata(fluid string) (Metadata, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	b, err := json.Marshal(map[string]any{"operation": "metadata", "fluid": fluid})
+	if err != nil {
+		return Metadata{}, err
+	}
+	if _, err := w.in.Write(append(b, '\n')); err != nil {
+		return Metadata{}, err
+	}
+	line, err := w.out.ReadBytes('\n')
+	if err != nil {
+		return Metadata{}, err
+	}
+	var response Metadata
+	if err := json.Unmarshal(line, &response); err != nil {
+		return Metadata{}, fmt.Errorf("decode reference metadata: %w", err)
+	}
+	if response.Fluid == "" {
+		return Metadata{}, fmt.Errorf("reference metadata missing fluid %q", fluid)
+	}
+	return response, nil
 }
 func (w *Worker) Close() error { _ = w.in.Close(); return w.cmd.Wait() }

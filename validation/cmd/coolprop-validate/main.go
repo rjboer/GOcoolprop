@@ -113,6 +113,14 @@ func run(ctx context.Context, opts options) error {
 		return err
 	}
 	engine := candidate.Engine{DataDir: "data"}
+	referenceDomains := make(map[string]reference.Metadata, len(fluids))
+	for _, fluidName := range fluids {
+		metadata, metadataErr := ref.Metadata(strings.TrimSpace(fluidName))
+		if metadataErr != nil {
+			return fmt.Errorf("reference metadata for %s: %w", fluidName, metadataErr)
+		}
+		referenceDomains[strings.TrimSpace(fluidName)] = metadata
+	}
 	suites := []string{"td_grid", "pt_grid", "quasi_random", "saturation", "phase_boundary", "critical_boundary", "validity_boundary", "flash", "round_trip", "invalid_input"}
 	statPlan, err := stats.BuildPlan(fluids, suites, engine.Capabilities().InputPairs, engine.Capabilities().Outputs, 5000, 0.99, 0.001)
 	if err != nil {
@@ -135,14 +143,16 @@ func run(ctx context.Context, opts options) error {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			row := runFluid(ctx, run, name, engine, ref, opts.Generator)
+			row := runFluid(ctx, run, name, engine, ref, opts.Generator, referenceDomains[name])
 			mu.Lock()
 			rows = append(rows, row)
 			mu.Unlock()
 		}(fluidName)
 	}
 	wg.Wait()
-	_ = report.IndexWithPlan(filepath.Join(opts.Root, run.ID, "index.md"), run.ID, rows, statPlan)
+	if err := report.IndexWithPlan(filepath.Join(opts.Root, run.ID, "index.md"), run.ID, rows, statPlan); err != nil {
+		return fmt.Errorf("write run index: %w", err)
+	}
 	fmt.Printf("run=%s fluids=%d workers=%d\n", run.ID, len(rows), runtime.NumCPU())
 	return nil
 }
@@ -234,20 +244,36 @@ func preflight(ctx context.Context, opts options) error {
 	return nil
 }
 
-func runFluid(ctx context.Context, run storage.Run, name string, engine candidate.Engine, ref *reference.Worker, gen generator.Config) report.Fluid {
+func runFluid(ctx context.Context, run storage.Run, name string, engine candidate.Engine, ref *reference.Worker, gen generator.Config, referenceDomain reference.Metadata) report.Fluid {
 	dir := run.FluidDir(name)
 	meta := engine.Metadata(name)
-	env := screeningEnvelope(meta)
+	env := screeningEnvelopeFrom(meta, referenceDomain)
 	cases := generator.Screening(name, env, gen)
 	passed, failed := 0, 0
+	counters := report.Counters{}
 	failures := make([]caseFailure, 0)
 	for _, c := range cases {
+		counters.Attempted++
 		cr := engine.Evaluate(ctx, candidate.Request{ID: c.ID, Fluid: c.Fluid, Output: c.Output, Input1: c.Input1, Input2: c.Input2, Value1: c.Value1, Value2: c.Value2})
 		ok := cr.Error == ""
 		if ref != nil {
 			rr, err := ref.Call(reference.Request{RequestID: c.ID, Fluid: c.Fluid, Cases: []reference.Case{{Output: c.Output, Input1: c.Input1, Input2: c.Input2, Fluid: c.Fluid, Value1: c.Value1, Value2: c.Value2}}})
-			out := compareOutcome(cr, rr, err)
+			out := compareOutcomeForCase(c, cr, rr, err)
 			ok = out.OK
+			switch out.Failure.Outcome {
+			case compare.OutcomePassed:
+				counters.ValidCompared++
+				counters.ValidPassed++
+			case compare.OutcomeFailedNumeric, compare.OutcomeFailedPhase:
+				counters.ValidCompared++
+				counters.ValidFailed++
+			case compare.OutcomeConsistentError:
+				counters.ConsistentInvalid++
+			case compare.OutcomeErrorMismatch:
+				counters.ErrorMismatch++
+			default:
+				counters.Unresolved++
+			}
 			if !out.OK {
 				out.Failure.ID = c.ID
 				out.Failure.Output = c.Output
@@ -267,18 +293,40 @@ func runFluid(ctx context.Context, run storage.Run, name string, engine candidat
 		}
 	}
 	status := "passed"
-	if failed > 0 {
+	if failed > 0 || counters.ValidCompared == 0 || counters.ErrorMismatch > 0 || counters.Unresolved > 0 {
 		status = "failed"
 	}
-	_ = storage.WriteSummary(dir, name, status, len(cases), passed, failed)
-	_ = storage.WriteJSON(filepath.Join(dir, "summary.json"), map[string]any{"fluid": name, "status": status, "total": len(cases), "passed": passed, "failed": failed, "completed_at": time.Now().UTC()})
-	_ = storage.WriteJSON(filepath.Join(dir, "failures.json"), failures)
-	_ = run.Finish(name, failed == 0)
-	return report.Fluid{Name: name, Status: status, Total: len(cases), Passed: passed, Failed: failed, Report: filepath.Join(status, name, "summary.md")}
+	if err := storage.WriteSummary(dir, name, status, len(cases), passed, failed); err != nil {
+		counters.Unresolved++
+		status = "failed"
+	}
+	if err := storage.WriteJSON(filepath.Join(dir, "summary.json"), map[string]any{"fluid": name, "status": status, "total": len(cases), "passed": passed, "failed": failed, "counters": counters, "completed_at": time.Now().UTC()}); err != nil {
+		counters.Unresolved++
+		status = "failed"
+	}
+	if err := storage.WriteJSON(filepath.Join(dir, "failures.json"), failures); err != nil {
+		counters.Unresolved++
+		status = "failed"
+	}
+	if err := run.Finish(name, status == "passed"); err != nil {
+		counters.Unresolved++
+		status = "failed"
+	}
+	return report.Fluid{Name: name, Status: status, Total: len(cases), Passed: passed, Failed: failed, Counters: counters, Report: filepath.Join(map[bool]string{true: "passed", false: "failed"}[status == "passed"], name, "summary.md")}
 }
 
 func screeningEnvelope(meta candidate.FluidMetadata) generator.Envelope {
-	env := generator.Envelope{TMin: meta.Tmin, TMax: meta.Tmax, PMin: meta.Pmin, PMax: meta.Pmax, RhoMin: 1, RhoMax: meta.RhoCrit * 20}
+	return screeningEnvelopeFrom(meta, reference.Metadata{})
+}
+
+func screeningEnvelopeFrom(meta candidate.FluidMetadata, referenceDomain reference.Metadata) generator.Envelope {
+	tmin, tmax := meta.Tmin, meta.Tmax
+	pmin, pmax := meta.Pmin, meta.Pmax
+	if referenceDomain.Tmin > 0 {
+		tmin, tmax = referenceDomain.Tmin, referenceDomain.Tmax
+		pmin, pmax = referenceDomain.Pmin, referenceDomain.Pmax
+	}
+	env := generator.Envelope{TMin: tmin, TMax: tmax, PMin: pmin, PMax: pmax, RhoMin: 1, RhoMax: meta.RhoCrit * 20}
 	if env.TMax <= env.TMin {
 		env.TMin = 100
 		env.TMax = 500
@@ -287,9 +335,6 @@ func screeningEnvelope(meta candidate.FluidMetadata) generator.Envelope {
 	}
 	if env.PMax <= env.PMin {
 		env.PMax = 1e8
-	}
-	if meta.Pcrit > env.PMin && meta.Pcrit < env.PMax {
-		env.PMax = meta.Pcrit
 	}
 	if env.PMin <= 0 {
 		env.PMin = 1
@@ -328,6 +373,18 @@ type caseFailure struct {
 }
 
 func compareOutcome(cr candidate.Result, rr reference.Response, refErr error) caseOutcome {
+	return compareOutcomeWithTolerance(compare.Tolerance{Absolute: 1e-9, Relative: 1e-8}, cr, rr, refErr)
+}
+
+func compareOutcomeForCase(c generator.Case, cr candidate.Result, rr reference.Response, refErr error) caseOutcome {
+	stage := c.Stage
+	if c.Input1 != "" && c.Input2 != "" {
+		stage += "/" + c.Input1 + "-" + c.Input2
+	}
+	return compareOutcomeWithTolerance(compare.ToleranceFor(c.Output, stage), cr, rr, refErr)
+}
+
+func compareOutcomeWithTolerance(tolerance compare.Tolerance, cr candidate.Result, rr reference.Response, refErr error) caseOutcome {
 	if refErr != nil {
 		return caseOutcome{Failure: caseFailure{Reason: "reference_error", Outcome: compare.OutcomeValidatorError, Candidate: cr.Value, ReferenceError: refErr.Error()}}
 	}
@@ -335,8 +392,8 @@ func compareOutcome(cr candidate.Result, rr reference.Response, refErr error) ca
 		return caseOutcome{Failure: caseFailure{Reason: "reference_error", Outcome: compare.OutcomeValidatorError, Candidate: cr.Value, ReferenceError: "empty response"}}
 	}
 	item := rr.Results[0]
-	result := compare.Compare(cr.Value, cr.Error, "", item.Value, item.Error, item.Phase, compare.Tolerance{Absolute: 1e-9, Relative: 1e-8})
-	if result.Outcome == compare.OutcomePassed || result.Outcome == compare.OutcomeConsistentError {
+	result := compare.Compare(cr.Value, cr.Error, cr.Phase, item.Value, item.Error, item.Phase, tolerance)
+	if result.Outcome == compare.OutcomePassed {
 		return caseOutcome{OK: true}
 	}
 	reason := "tolerance"

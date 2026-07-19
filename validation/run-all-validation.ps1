@@ -48,6 +48,11 @@ $runDirs = Get-ChildItem -Directory $Results | Sort-Object Name -Descending
 $latest = $runDirs | Select-Object -First 1
 $failed = @(Get-ChildItem -Path (Join-Path $latest.FullName "failed") -Recurse -Filter failures.json -ErrorAction SilentlyContinue)
 if ($failed.Count -eq 0 -or $SkipFailureFollowUp) {
+    $index = Get-Content -Raw (Join-Path $latest.FullName "index.md")
+    if ($index.Contains("planned_not_executed")) {
+        Write-Error "Statistical validation is incomplete: one or more required suites are planned_not_executed. Run cannot be certified."
+        exit 2
+    }
     Write-Output "Validation complete: $($latest.FullName)"
     exit 0
 }
@@ -63,4 +68,9 @@ if ($LASTEXITCODE -ne 0) {
     throw "Integer follow-up validation failed with exit code $LASTEXITCODE."
 }
 $followUp = Get-ChildItem -Directory $Results | Sort-Object Name -Descending | Select-Object -First 1
+$followUpIndex = Get-Content -Raw (Join-Path $followUp.FullName "index.md")
+if ($followUpIndex.Contains("planned_not_executed")) {
+    Write-Error "Integer follow-up completed only screening cases; required statistical suites remain planned_not_executed. Run cannot be certified."
+    exit 2
+}
 Write-Output "Integer follow-up complete: $($followUp.FullName)"

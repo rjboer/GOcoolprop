@@ -15,7 +15,7 @@ func almostEqualRel(a, b, relTol float64) bool {
 }
 
 func TestPropSI_Water(t *testing.T) {
-	rho, err := PropSI("D", "T", 300.0, "P", 101325.0, "Water")
+	rho, err := PropSI("Dmolar", "T", 300.0, "P", 101325.0, "Water")
 	if err != nil {
 		t.Fatalf("PropSI(D) for Water failed: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestPropSI_Nitrogen(t *testing.T) {
 		R = 8.314462618
 	)
 
-	rho, err := PropSI("D", "T", T, "P", P, "Nitrogen")
+	rho, err := PropSI("Dmolar", "T", T, "P", P, "Nitrogen")
 	if err != nil {
 		t.Fatalf("PropSI(D) for Nitrogen failed: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestPropSI_Nitrogen(t *testing.T) {
 		t.Errorf("Nitrogen density mismatch: got %v mol/m^3, expected ~%v mol/m^3", rho, rhoExpected)
 	}
 
-	p, err := PropSI("P", "T", T, "D", rho, "Nitrogen")
+	p, err := PropSI("P", "T", T, "Dmolar", rho, "Nitrogen")
 	if err != nil {
 		t.Fatalf("PropSI(P) for Nitrogen failed: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestPropSI_Hydrogen(t *testing.T) {
 		R = 8.314462618
 	)
 
-	rho, err := PropSI("D", "T", T, "P", P, "Hydrogen")
+	rho, err := PropSI("Dmolar", "T", T, "P", P, "Hydrogen")
 	if err != nil {
 		t.Fatalf("PropSI(D) for Hydrogen failed: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestPropSI_Hydrogen(t *testing.T) {
 		t.Errorf("Hydrogen density mismatch: got %v mol/m^3, expected ~%v mol/m^3", rho, rhoExpected)
 	}
 
-	p, err := PropSI("P", "T", T, "D", rho, "Hydrogen")
+	p, err := PropSI("P", "T", T, "Dmolar", rho, "Hydrogen")
 	if err != nil {
 		t.Fatalf("PropSI(P) for Hydrogen failed: %v", err)
 	}
@@ -124,20 +124,20 @@ func TestPropSI_WaterSaturationEndpoints(t *testing.T) {
 }
 
 func TestPropSI_RejectsInteriorQualityInputs(t *testing.T) {
-	if _, err := PropSI("D", "T", 300.0, "Q", 0.5, "Water"); err == nil {
+	if _, err := PropSI("Dmolar", "T", 300.0, "Q", 0.5, "Water"); err == nil {
 		t.Fatalf("expected T,Q with interior quality to fail")
 	}
-	if _, err := PropSI("D", "P", 101325.0, "Q", 0.5, "Water"); err == nil {
+	if _, err := PropSI("Dmolar", "P", 101325.0, "Q", 0.5, "Water"); err == nil {
 		t.Fatalf("expected P,Q with interior quality to fail")
 	}
 }
 
 func TestPropSI_RejectsInteriorQualityOutput(t *testing.T) {
-	rhoL, err := PropSI("D", "T", 300.0, "Q", 0.0, "Water")
+	rhoL, err := PropSI("Dmolar", "T", 300.0, "Q", 0.0, "Water")
 	if err != nil {
 		t.Fatalf("rhoL: %v", err)
 	}
-	rhoV, err := PropSI("D", "T", 300.0, "Q", 1.0, "Water")
+	rhoV, err := PropSI("Dmolar", "T", 300.0, "Q", 1.0, "Water")
 	if err != nil {
 		t.Fatalf("rhoV: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestPropSI_RejectsInteriorQualityOutput(t *testing.T) {
 	vMix := 0.5*(1.0/rhoL) + 0.5*(1.0/rhoV)
 	rhoMix := 1.0 / vMix
 
-	if _, err := PropSI("Q", "T", 300.0, "D", rhoMix, "Water"); err == nil {
+	if _, err := PropSI("Q", "T", 300.0, "Dmolar", rhoMix, "Water"); err == nil {
 		t.Fatalf("expected Q evaluation for interior two-phase state to fail")
 	}
 }

@@ -17,6 +17,9 @@ coverage.*
 *.coverprofile
 profile.cov
 
+# Generated validation runs
+validation/results-*/
+
 
 
 # Dependency directories (remove the comment below to include it)

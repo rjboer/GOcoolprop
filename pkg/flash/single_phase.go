@@ -70,7 +70,7 @@ func inferPhaseTP(fluidData *fluid.FluidData, T, P float64) (phasePreference, er
 	if T <= 0 || P <= 0 {
 		return phaseAny, fmt.Errorf("invalid T,P state T=%g P=%g", T, P)
 	}
-	if T >= fluidData.States.Critical.T || P >= fluidData.States.Critical.P {
+	if T >= fluidData.States.Critical.T {
 		return phaseAny, nil
 	}
 	psat, err := saturation.Psat(fluidData, T)

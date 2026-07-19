@@ -44,16 +44,16 @@ type referenceTPPoint struct {
 }
 
 type referenceSatPoint struct {
-	Name string  `json:"name"`
-	Fluid string `json:"fluid"`
-	T    float64 `json:"T,omitempty"`
-	P    float64 `json:"P,omitempty"`
-	Q    float64 `json:"Q"`
-	PRef float64 `json:"P_ref,omitempty"`
-	TRef float64 `json:"T_ref,omitempty"`
-	Rho  float64 `json:"rho"`
-	H    float64 `json:"H"`
-	S    float64 `json:"S"`
+	Name  string  `json:"name"`
+	Fluid string  `json:"fluid"`
+	T     float64 `json:"T,omitempty"`
+	P     float64 `json:"P,omitempty"`
+	Q     float64 `json:"Q"`
+	PRef  float64 `json:"P_ref,omitempty"`
+	TRef  float64 `json:"T_ref,omitempty"`
+	Rho   float64 `json:"rho"`
+	H     float64 `json:"H"`
+	S     float64 `json:"S"`
 }
 
 func loadReferenceDataset(t *testing.T) referenceDataset {
@@ -109,37 +109,37 @@ func TestPropSITDMatchesCoolPropReferencePoints(t *testing.T) {
 	ds := loadReferenceDataset(t)
 	for _, tt := range ds.StatePoints {
 		t.Run(tt.Name, func(t *testing.T) {
-			p, err := props.PropSI("P", "T", tt.T, "D", tt.Rho, tt.Fluid)
+			p, err := props.PropSI("P", "T", tt.T, "Dmolar", tt.Rho, tt.Fluid)
 			if err != nil {
 				t.Fatalf("PropSI P from T,D failed: %v", err)
 			}
 			requireRel(t, p, tt.P, 3e-4, "P(T,D)")
 
-			h, err := props.PropSI("H", "T", tt.T, "D", tt.Rho, tt.Fluid)
+			h, err := props.PropSI("H", "T", tt.T, "Dmolar", tt.Rho, tt.Fluid)
 			if err != nil {
 				t.Fatalf("PropSI H from T,D failed: %v", err)
 			}
 			requireRel(t, h, tt.H, 3e-4, "H(T,D)")
 
-			s, err := props.PropSI("S", "T", tt.T, "D", tt.Rho, tt.Fluid)
+			s, err := props.PropSI("S", "T", tt.T, "Dmolar", tt.Rho, tt.Fluid)
 			if err != nil {
 				t.Fatalf("PropSI S from T,D failed: %v", err)
 			}
 			requireRel(t, s, tt.S, 3e-4, "S(T,D)")
 
-			u, err := props.PropSI("U", "T", tt.T, "D", tt.Rho, tt.Fluid)
+			u, err := props.PropSI("U", "T", tt.T, "Dmolar", tt.Rho, tt.Fluid)
 			if err != nil {
 				t.Fatalf("PropSI U from T,D failed: %v", err)
 			}
 			requireRel(t, u, tt.U, 3e-4, "U(T,D)")
 
-			cv, err := props.PropSI("CV", "T", tt.T, "D", tt.Rho, tt.Fluid)
+			cv, err := props.PropSI("CV", "T", tt.T, "Dmolar", tt.Rho, tt.Fluid)
 			if err != nil {
 				t.Fatalf("PropSI Cv from T,D failed: %v", err)
 			}
 			requireRel(t, cv, tt.Cv, 5e-4, "Cv(T,D)")
 
-			cp, err := props.PropSI("CP", "T", tt.T, "D", tt.Rho, tt.Fluid)
+			cp, err := props.PropSI("CP", "T", tt.T, "Dmolar", tt.Rho, tt.Fluid)
 			if err != nil {
 				t.Fatalf("PropSI Cp from T,D failed: %v", err)
 			}
@@ -152,7 +152,7 @@ func TestPropSITPMatchesCoolPropReferencePoints(t *testing.T) {
 	ds := loadReferenceDataset(t)
 	for _, tt := range ds.TPPoints {
 		t.Run(tt.Name, func(t *testing.T) {
-			rho, err := props.PropSI("D", "T", tt.T, "P", tt.P, tt.Fluid)
+			rho, err := props.PropSI("Dmolar", "T", tt.T, "P", tt.P, tt.Fluid)
 			if err != nil {
 				t.Fatalf("PropSI D from T,P failed: %v", err)
 			}
@@ -188,7 +188,7 @@ func TestPropSITPMatchesCoolPropReferencePoints(t *testing.T) {
 			}
 			requireRel(t, cp, tt.Cp, 7e-4, "cp(T,P)")
 
-			rhoFromTH, err := props.PropSI("D", "T", tt.T, "H", tt.H, tt.Fluid)
+			rhoFromTH, err := props.PropSI("Dmolar", "T", tt.T, "H", tt.H, tt.Fluid)
 			if err != nil {
 				t.Fatalf("PropSI D from T,H failed: %v", err)
 			}
@@ -200,7 +200,7 @@ func TestPropSITPMatchesCoolPropReferencePoints(t *testing.T) {
 			}
 			requireAbs(t, tempFromPH, tt.T, 2e-3, "T(P,H)")
 
-			rhoFromPH, err := props.PropSI("D", "P", tt.P, "H", tt.H, tt.Fluid)
+			rhoFromPH, err := props.PropSI("Dmolar", "P", tt.P, "H", tt.H, tt.Fluid)
 			if err != nil {
 				t.Fatalf("PropSI D from P,H failed: %v", err)
 			}
@@ -212,7 +212,7 @@ func TestPropSITPMatchesCoolPropReferencePoints(t *testing.T) {
 			}
 			requireAbs(t, tempFromPS, tt.T, 2e-3, "T(P,S)")
 
-			rhoFromPS, err := props.PropSI("D", "P", tt.P, "S", tt.S, tt.Fluid)
+			rhoFromPS, err := props.PropSI("Dmolar", "P", tt.P, "S", tt.S, tt.Fluid)
 			if err != nil {
 				t.Fatalf("PropSI D from P,S failed: %v", err)
 			}
@@ -232,7 +232,7 @@ func TestPropSISaturationEndpointsMatchCoolPropReferencePoints(t *testing.T) {
 				}
 				requireRel(t, p, tt.PRef, 8e-3, "P(T,Q)")
 
-				rho, err := props.PropSI("D", "T", tt.T, "Q", tt.Q, tt.Fluid)
+				rho, err := props.PropSI("Dmolar", "T", tt.T, "Q", tt.Q, tt.Fluid)
 				if err != nil {
 					t.Fatalf("PropSI D from T,Q failed: %v", err)
 				}
@@ -264,7 +264,7 @@ func TestPropSISaturationEndpointsMatchCoolPropReferencePoints(t *testing.T) {
 				}
 				requireAbs(t, temp, tt.TRef, 2e-1, "T(P,Q)")
 
-				rho, err := props.PropSI("D", "P", tt.P, "Q", tt.Q, tt.Fluid)
+				rho, err := props.PropSI("Dmolar", "P", tt.P, "Q", tt.Q, tt.Fluid)
 				if err != nil {
 					t.Fatalf("PropSI D from P,Q failed: %v", err)
 				}
@@ -299,7 +299,7 @@ func TestPropSIRejectsTPAtExactSaturationBoundary(t *testing.T) {
 			continue
 		}
 		t.Run(tt.Name, func(t *testing.T) {
-			if _, err := props.PropSI("D", "T", tt.T, "P", tt.PRef, tt.Fluid); err == nil {
+			if _, err := props.PropSI("Dmolar", "T", tt.T, "P", tt.PRef, tt.Fluid); err == nil {
 				t.Fatalf("expected T,P saturation-boundary request to fail for %s", tt.Name)
 			}
 		})

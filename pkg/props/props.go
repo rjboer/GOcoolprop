@@ -17,6 +17,12 @@ func PropSI(output, name1 string, val1 float64, name2 string, val2 float64, flui
 		// Try relative path if running from tests
 		f, err = fluid.LoadFluidByName(fluidName, "../../data")
 		if err != nil {
+			f, err = fluid.LoadFluidByName(fluidName, "../../../data")
+		}
+		if err != nil {
+			f, err = fluid.LoadFluidByName(fluidName, "../../../../data")
+		}
+		if err != nil {
 			return 0, fmt.Errorf("fluid not found: %v", err)
 		}
 	}
@@ -38,13 +44,16 @@ func PropSI(output, name1 string, val1 float64, name2 string, val2 float64, flui
 	// -------- Input cases --------
 
 	// Case 1: T and D (density given directly)
-	if (name1 == "T" && name2 == "D") || (name1 == "D" && name2 == "T") {
+	if (name1 == "T" && (name2 == "D" || name2 == "DMOLAR")) || ((name1 == "D" || name1 == "DMOLAR") && name2 == "T") {
 		if name1 == "T" {
 			T = val1
 			Rho = val2
 		} else {
 			Rho = val1
 			T = val2
+		}
+		if name1 == "D" || name2 == "D" {
+			Rho /= f.EOS[0].MolarMass
 		}
 
 	} else if (name1 == "T" && name2 == "P") || (name1 == "P" && name2 == "T") {
@@ -194,7 +203,9 @@ func PropSI(output, name1 string, val1 float64, name2 string, val2 float64, flui
 			return knownSatT, nil
 		}
 		return state.T, nil
-	case "D", "DMOLAR":
+	case "D":
+		return state.Rho * f.EOS[0].MolarMass, nil
+	case "DMOLAR":
 		return state.Rho, nil
 	case "P":
 		if hasKnownSatP {

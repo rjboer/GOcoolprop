@@ -1,0 +1,43 @@
+reference:
+  implementation: python-coolprop
+  version: "7.2.0"
+  backend: HEOS
+  reference_state: DEF
+  worker_processes: 8
+  batch_size: 512
+  request_timeout: 30s
+candidate:
+  package: source
+  call: PropSI
+execution:
+  candidate_workers: 0
+  active_fluids: 4
+  seed: 20260719
+  resume: true
+screening:
+  td_temperature_points: 64
+  td_density_points: 64
+  pt_temperature_points: 64
+  pt_pressure_points: 64
+quasi_random_points: 2048
+statistics:
+  enabled: true
+  confidence: 0.99
+  detectable_failure_prevalence: 0.001
+  minimum_valid_audit_samples: 5000
+  family_wise_adjustment: bonferroni
+  safety_multiplier: 1.5
+saturation:
+  temperature_points: 256
+  qualities: [0, 0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99, 1]
+adaptive:
+  enabled: true
+  initial_grid: 5
+  refined_grid: 21
+  max_levels: 4
+  max_points_per_fluid: 2000000
+output:
+  root: results
+  progress: text
+  save_all_points: true
+  compression: gzip
